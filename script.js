@@ -90,13 +90,31 @@ function renderModal() {
   if (!property) return;
   const isSaved = state.saved.has(property.id);
   const thumbs = [property.image, ...properties.filter((item) => item.category === property.category && item.id !== property.id).slice(0, 2).map((item) => item.image)];
-  const formPanel = state.formOpen ? `<section class="inquiry-form-shell"><h4>Schedule Viewing / Request Details</h4><form id="inquiryForm"><label>Full Name<input name="fullName" required type="text" placeholder="e.g. Amina Hassan"/></label><label>Phone Number<input name="phone" required type="tel" placeholder="+254 712 345 678"/></label><label>Preferred Viewing Date<input name="date" required type="date"/></label><label>Inquiry Type<select name="inquiryType" required><option value="">Select inquiry type</option><option>Schedule Viewing</option><option>Request More Details</option><option>Price Negotiation</option><option>Agent Callback</option></select></label><label>Message<textarea name="message" required rows="3" placeholder="Tell us what you need for this property."></textarea></label><button type="submit" class="btn btn-gold">Submit Request</button></form></section>` : '';
+  const formPanel = state.formOpen ? `<section class="inquiry-form-shell" id="inquiryFormSection"><h4>Schedule Viewing / Request Details</h4><form id="inquiryForm"><label>Full Name<input name="fullName" required type="text" placeholder="e.g. Amina Hassan"/></label><label>Phone Number<input name="phone" required type="tel" placeholder="+254 712 345 678"/></label><label>Preferred Viewing Date<input name="date" required type="date"/></label><label>Inquiry Type<select name="inquiryType" required><option value="">Select inquiry type</option><option>Schedule Viewing</option><option>Request More Details</option><option>Price Negotiation</option><option>Agent Callback</option></select></label><label>Message<textarea name="message" required rows="3" placeholder="Tell us what you need for this property."></textarea></label><button type="submit" class="btn btn-gold">Submit Request</button></form></section>` : '';
   const successPanel = state.formSuccess ? `<div class="form-success"><h4>Request prepared successfully.</h4><p>Backend submission will be connected in production for <strong>${property.title}</strong>.</p></div>` : '';
   const modal = document.createElement('div');
   modal.id = 'propertyDetailModal'; modal.className = 'property-modal-backdrop';
   const message = encodeURIComponent(`Hello Eastleigh Properties, I'm interested in ${property.title} listed at ${formatPrice(property.price,property.priceType)}. Please share more details.`);
-  modal.innerHTML = `<section class="property-modal" role="dialog" aria-modal="true" aria-labelledby="propertyModalTitle"><button type="button" class="modal-close" aria-label="Close property details">×</button><div class="modal-media"><img src="${property.image}" alt="${property.title}"/><div class="thumbs">${thumbs.map((image, i) => `<img src="${image}" alt="Property view ${i + 1}"/>`).join('')}</div></div><div class="modal-content"><span class="modal-intent">${intentLabel(property)}</span><h3 id="propertyModalTitle">${property.title}</h3><p class="modal-location">${property.location} · ${property.area}</p><strong>${formatPrice(property.price,property.priceType)}</strong><p class="modal-meta">${property.category} · ${property.category === 'Land / Plots' ? property.size : `${property.beds} Beds · ${property.baths} Baths · ${property.size}`}</p><p class="modal-description">${property.description}</p><ul class="feature-list">${property.features.map((feature) => `<li>${feature}</li>`).join('')}</ul><article class="agent-card"><h4>Your Eastleigh Agent</h4><p><strong>Nadia Yusuf</strong> · Senior Property Advisor</p><p>Call: +254 711 804 225</p></article><div class="modal-actions"><button type="button" class="btn ${isSaved ? '' : 'btn-gold'} save-modal">${isSaved ? 'Saved Property ♥' : 'Save Property'}</button><button type="button" class="btn btn-gold contact-agent">Contact Agent</button><a class="btn btn-gold" target="_blank" rel="noopener" href="https://wa.me/254711804225?text=${message}">WhatsApp Agent</a><button type="button" class="btn btn-gold schedule-viewing">Schedule Viewing</button></div><div class="contact-toast" hidden>Agent Nadia Yusuf · +254 711 804 225 · eastleigh.demo@broker.co.ke</div>${formPanel}${successPanel}</div></section>`;
+  modal.innerHTML = `<section class="property-modal" role="dialog" aria-modal="true" aria-labelledby="propertyModalTitle"><button type="button" class="modal-close" aria-label="Close property details">×</button><div class="modal-media"><img src="${property.image}" alt="${property.title}"/><div class="thumbs">${thumbs.map((image, i) => `<img src="${image}" alt="Property view ${i + 1}"/>`).join('')}</div></div><div class="modal-content"><div class="modal-body" id="modalBodyScroll"><span class="modal-intent">${intentLabel(property)}</span><h3 id="propertyModalTitle">${property.title}</h3><p class="modal-location">${property.location} · ${property.area}</p><strong>${formatPrice(property.price,property.priceType)}</strong><p class="modal-meta">${property.category} · ${property.category === 'Land / Plots' ? property.size : `${property.beds} Beds · ${property.baths} Baths · ${property.size}`}</p><p class="modal-description">${property.description}</p><ul class="feature-list">${property.features.map((feature) => `<li>${feature}</li>`).join('')}</ul><article class="agent-card"><h4>Your Eastleigh Agent</h4><p><strong>Nadia Yusuf</strong> · Senior Property Advisor</p><p>Call: +254 711 804 225</p></article><div class="modal-actions"><button type="button" class="btn ${isSaved ? '' : 'btn-gold'} save-modal">${isSaved ? 'Saved Property ♥' : 'Save Property'}</button><button type="button" class="btn btn-gold contact-agent">Contact Agent</button><a class="btn btn-gold" target="_blank" rel="noopener" href="https://wa.me/254711804225?text=${message}">WhatsApp Agent</a><button type="button" class="btn btn-gold schedule-viewing">Schedule Viewing</button></div><div class="contact-toast" hidden>Agent Nadia Yusuf · +254 711 804 225 · eastleigh.demo@broker.co.ke</div>${formPanel}${successPanel}</div></div></section>`;
   document.body.appendChild(modal);
+}
+
+
+function revealAndScrollToInquiryForm(){
+  if (!state.activePropertyId) return;
+  const modalBody = document.getElementById('modalBodyScroll');
+  const formSection = document.getElementById('inquiryFormSection');
+  if (formSection && modalBody) {
+    formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  state.formOpen = true;
+  state.formSuccess = false;
+  renderModal();
+  requestAnimationFrame(() => {
+    const newFormSection = document.getElementById('inquiryFormSection');
+    if (newFormSection) newFormSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 function renderRecent(){const items=state.recent.map(getProperty).filter(Boolean); if(!items.length){recentWrap.style.display='none'; return;} recentWrap.style.display='block'; recentGrid.innerHTML=items.map(propertyCard).join('');}
@@ -152,7 +170,7 @@ document.addEventListener('click', (event) => {
   if (event.target.matches('.modal-close') || event.target.id === 'propertyDetailModal') closeModal(true);
   if (event.target.matches('.save-modal')) toggleSaved(state.activePropertyId);
   if (event.target.matches('.contact-agent')) {const toast = document.querySelector('.contact-toast'); if (toast) toast.hidden = !toast.hidden;}
-  if (event.target.matches('.schedule-viewing')) {state.formOpen = true;state.formSuccess = false;renderModal();}
+  if (event.target.matches('.schedule-viewing')) revealAndScrollToInquiryForm();
 });
 document.addEventListener('submit', (event) => {if (event.target.id !== 'inquiryForm') return;event.preventDefault();const form = event.target;if (!form.checkValidity()) {form.reportValidity();return;}state.formOpen = false;state.formSuccess = true;renderModal();});
 document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && state.activePropertyId) closeModal(true);});
