@@ -33,6 +33,17 @@ const recentGrid = document.getElementById('recentlyViewedGrid');
 const formatPrice=(p,t)=>`KSh ${p.toLocaleString()}${t==='month'?' / month':''}`;
 const intentLabel = (property) => property.category === 'Land / Plots' ? (property.features.includes('Commercial Use') ? 'Commercial' : 'Investment') : property.intent === 'Rent' ? 'For Rent' : 'For Sale';
 const getProperty = (id) => properties.find((item) => item.id === Number(id));
+let stickyVisible = false;
+let tickingSticky = false;
+const scrollToResults = () => {
+  const target = resultCount;
+  if (!target) return;
+  const headerHeight = document.querySelector('.site-header')?.offsetHeight || 0;
+  const stickyVisible = stickySearch?.classList.contains('visible');
+  const stickyHeight = stickyVisible ? (stickySearch?.offsetHeight || 0) : 0;
+  const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - stickyHeight - 12;
+  window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+};
 
 function applyFilters(){return properties.filter((p)=>{if(state.intent==='Land / Plots'){if(p.category!=='Land / Plots')return false;} else if(p.intent!==state.intent)return false; if(state.type!=='All Types'&&p.category!==state.type)return false; if(state.min&&p.price<Number(state.min))return false; if(state.max&&p.price>Number(state.max))return false; if(state.beds>0&&p.category!=='Land / Plots'&&p.beds<state.beds)return false; if(state.features.length&&!state.features.every(f=>p.features.includes(f)))return false; const hay=`${p.title} ${p.location} ${p.category} ${p.area} ${p.features.join(' ')} ${p.description}`.toLowerCase(); if(state.search&&!hay.includes(state.search.toLowerCase()))return false; return true;});}
 function renderCategories(filtered){const cards=[{name:'Houses',count:filtered.filter(p=>p.category==='Houses').length,img:'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80'},{name:'Apartments',count:filtered.filter(p=>p.category==='Apartments').length,img:'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?auto=format&fit=crop&w=1200&q=80'},{name:'Land / Plots',count:filtered.filter(p=>p.category==='Land / Plots').length,img:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80'},{name:'Commercial Spaces',count:filtered.filter(p=>p.features.includes('Commercial Use')).length,img:'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80'},{name:'Rental Units',count:filtered.filter(p=>p.intent==='Rent').length,img:'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80'}];categoryCards.innerHTML=cards.map(c=>`<article class="image-card"><img src="${c.img}" alt="${c.name}"/><div><h3>${c.name}</h3><p>${c.count} listings</p></div></article>`).join('');}
@@ -60,30 +71,44 @@ function renderModal() {
 }
 
 function renderRecent(){const items=state.recent.map(getProperty).filter(Boolean); if(!items.length){recentWrap.style.display='none'; return;} recentWrap.style.display='block'; recentGrid.innerHTML=items.map(propertyCard).join('');}
-function render(){const filtered=applyFilters(); grid.innerHTML=!filtered.length?`<article class="empty-state"><h3>No matching properties found</h3><p>Try broadening your search or reset the filters.</p><button id="clearFromEmpty" class="btn btn-gold" type="button">Clear filters</button></article>`:filtered.slice(0,8).map(propertyCard).join('');
-resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories(filtered);renderRecent();document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); renderModal();}
+function render({ jumpToResults = false } = {}){const filtered=applyFilters(); grid.innerHTML=!filtered.length?`<article class="empty-state"><h3>No matching properties found</h3><p>Try broadening your search or reset the filters.</p><button id="clearFromEmpty" class="btn btn-gold" type="button">Clear filters</button></article>`:filtered.slice(0,8).map(propertyCard).join('');
+resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories(filtered);renderRecent();document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); renderModal();if(jumpToResults) requestAnimationFrame(scrollToResults);}
 
-function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];searchInput.value='';stickySearchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render();}
+function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];searchInput.value='';stickySearchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render({ jumpToResults:true });}
 function toggleSaved(id){if(state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); persistState(); render();}
-function setSearch(value){state.search=value.trim();searchInput.value=state.search;stickySearchInput.value=state.search;render();}
+function setSearch(value,{jumpToResults=false}={}){state.search=value.trim();searchInput.value=state.search;stickySearchInput.value=state.search;render({ jumpToResults });}
 function setDrawer(open){drawer.classList.toggle('open',open);mobileBackdrop.classList.toggle('open',open);document.body.classList.toggle('drawer-open',open);toggle.setAttribute('aria-expanded',String(open));}
+function updateStickySearchVisibility(){
+  const heroBottom = hero?.getBoundingClientRect().bottom ?? 0;
+  const headerHeight = document.querySelector('.site-header')?.offsetHeight || 0;
+  const showSticky = heroBottom <= (headerHeight + 32);
+  if(showSticky === stickyVisible) return;
+  stickyVisible = showSticky;
+  stickySearch.classList.toggle('visible', stickyVisible);
+}
+function onScrollSticky(){
+  if(tickingSticky) return;
+  tickingSticky = true;
+  requestAnimationFrame(()=>{updateStickySearchVisibility();tickingSticky=false;});
+}
 
 toggle?.addEventListener('click',()=>setDrawer(!drawer.classList.contains('open')));
 mobileBackdrop.addEventListener('click',()=>setDrawer(false));
 drawer.querySelectorAll('a,button').forEach(el=>el.addEventListener('click',()=>setDrawer(false)));
-window.addEventListener('scroll',()=>stickySearch.classList.toggle('visible',window.scrollY>(hero?.offsetHeight||420)-120));
+window.addEventListener('scroll',onScrollSticky,{ passive:true });
+window.addEventListener('resize',onScrollSticky);
 
-searchBtn.addEventListener('click',()=>setSearch(searchInput.value));
-stickySearchBtn.addEventListener('click',()=>setSearch(stickySearchInput.value));
+searchBtn.addEventListener('click',()=>setSearch(searchInput.value,{ jumpToResults:true }));
+stickySearchBtn.addEventListener('click',()=>setSearch(stickySearchInput.value,{ jumpToResults:true }));
 searchInput.addEventListener('input',e=>setSearch(e.target.value));
 stickySearchInput.addEventListener('input',e=>setSearch(e.target.value));
-document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.intent=btn.dataset.intent;render();}));
-typeFilter.addEventListener('change',e=>{state.type=e.target.value;render();});
-minPrice.addEventListener('input',e=>{state.min=e.target.value;render();});
-maxPrice.addEventListener('input',e=>{state.max=e.target.value;render();});
-bedsFilter.addEventListener('change',e=>{state.beds=Number(e.target.value);render();});
+document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.intent=btn.dataset.intent;render({ jumpToResults:true });}));
+typeFilter.addEventListener('change',e=>{state.type=e.target.value;render({ jumpToResults:true });});
+minPrice.addEventListener('input',e=>{state.min=e.target.value;render({ jumpToResults:true });});
+maxPrice.addEventListener('input',e=>{state.max=e.target.value;render({ jumpToResults:true });});
+bedsFilter.addEventListener('change',e=>{state.beds=Number(e.target.value);render({ jumpToResults:true });});
 moreFiltersBtn.addEventListener('click',()=>moreFilters.classList.toggle('open'));
-document.querySelectorAll('#moreFilters input').forEach(i=>i.addEventListener('change',()=>{state.features=[...document.querySelectorAll('#moreFilters input:checked')].map(n=>n.value);render();}));
+document.querySelectorAll('#moreFilters input').forEach(i=>i.addEventListener('change',()=>{state.features=[...document.querySelectorAll('#moreFilters input:checked')].map(n=>n.value);render({ jumpToResults:true });}));
 document.getElementById('clearFilters').addEventListener('click',clearFilters);
 
 window.addEventListener('popstate',()=>{const match=window.location.hash.match(/^#property-(\d+)$/); if(match){state.activePropertyId=Number(match[1]);renderModal();} else if(state.activePropertyId){state.activePropertyId=null;renderModal();}});
@@ -103,4 +128,4 @@ document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && s
 
 try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id));} catch {}
 const urlMatch=window.location.hash.match(/^#property-(\d+)$/); if(urlMatch && getProperty(urlMatch[1])) state.activePropertyId=Number(urlMatch[1]);
-setSearch(state.search); render(); if(state.activePropertyId) syncUrl(state.activePropertyId,false);
+setSearch(state.search); render(); updateStickySearchVisibility(); if(state.activePropertyId) syncUrl(state.activePropertyId,false);
