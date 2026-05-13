@@ -33,6 +33,10 @@ const recentGrid = document.getElementById('recentlyViewedGrid');
 const sortSelect = document.getElementById('sortSelect');
 const activeChips = document.getElementById('activeChips');
 const loadMoreBtn = document.getElementById('loadMoreBtn');
+const intentSectionAnchors = { Buy: 'buyPropertiesSection', Rent: 'rentPropertiesSection', 'Land / Plots': 'landPropertiesSection' };
+const buyPropertiesGrid = document.getElementById('buyPropertiesGrid');
+const rentPropertiesGrid = document.getElementById('rentPropertiesGrid');
+const landPropertiesGrid = document.getElementById('landPropertiesGrid');
 const formatPrice=(p,t)=>`KSh ${p.toLocaleString()}${t==='month'?' / month':''}`;
 const intentLabel = (property) => property.category === 'Land / Plots' ? (property.features.includes('Commercial Use') ? 'Commercial' : 'Investment') : property.intent === 'Rent' ? 'For Rent' : 'For Sale';
 const getProperty = (id) => properties.find((item) => item.id === Number(id));
@@ -47,6 +51,23 @@ const scrollToResults = () => {
   const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - stickyHeight - 12;
   window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
 };
+
+const scrollToSection = (sectionId) => {
+  const target = document.getElementById(sectionId);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+function getIntentSectionProperties(intent){
+  if(intent==='Land / Plots') return properties.filter((p)=>p.category==='Land / Plots');
+  return properties.filter((p)=>p.intent===intent && p.category!=='Land / Plots');
+}
+
+function renderIntentSections(){
+  if (buyPropertiesGrid) buyPropertiesGrid.innerHTML = getIntentSectionProperties('Buy').map(propertyCard).join('');
+  if (rentPropertiesGrid) rentPropertiesGrid.innerHTML = getIntentSectionProperties('Rent').map(propertyCard).join('');
+  if (landPropertiesGrid) landPropertiesGrid.innerHTML = getIntentSectionProperties('Land / Plots').map(propertyCard).join('');
+}
 
 function applyFilters(){return properties.filter((p)=>{if(state.intent==='Land / Plots'){if(p.category!=='Land / Plots')return false;} else if(p.intent!==state.intent)return false; if(state.type!=='All Types'&&p.category!==state.type)return false; if(state.min&&p.price<Number(state.min))return false; if(state.max&&p.price>Number(state.max))return false; if(state.beds>0&&p.category!=='Land / Plots'&&p.beds<state.beds)return false; if(state.features.length&&!state.features.every(f=>p.features.includes(f)))return false; const hay=`${p.title} ${p.location} ${p.category} ${p.area} ${p.features.join(' ')} ${p.description}`.toLowerCase(); if(state.search&&!hay.includes(state.search.toLowerCase()))return false; return true;});}
 
@@ -143,7 +164,7 @@ function revealAndScrollToInquiryForm(){
 
 function renderRecent(){const items=state.recent.map(getProperty).filter(Boolean); if(!items.length){recentWrap.style.display='none'; return;} recentWrap.style.display='block'; recentGrid.innerHTML=items.map(propertyCard).join('');}
 function render({ jumpToResults = false, resetVisible = false } = {}){const filtered=sortProperties(applyFilters()); if(resetVisible||!state.visibleCount) state.visibleCount=getInitialVisibleCount(); const visible=filtered.slice(0,state.visibleCount); grid.innerHTML=!filtered.length?`<article class="empty-state"><h3>No matching properties found</h3><p>Try broadening your search or reset the filters.</p><button id="clearFromEmpty" class="btn btn-gold" type="button">Clear filters</button></article>`:visible.map(propertyCard).join('');
-resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories();renderRecent();renderActiveChips();document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); loadMoreBtn.hidden = !filtered.length || state.visibleCount>=filtered.length; renderModal();if(jumpToResults) requestAnimationFrame(scrollToResults);}
+resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories();renderRecent();renderIntentSections();renderActiveChips();document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); loadMoreBtn.hidden = !filtered.length || state.visibleCount>=filtered.length; renderModal();if(jumpToResults) requestAnimationFrame(scrollToResults);}
 
 function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];state.categoryFocus=null;searchInput.value='';stickySearchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render({ jumpToResults:true, resetVisible:true });}
 function toggleSaved(id){if(state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); persistState(); render();}
@@ -173,7 +194,7 @@ searchBtn.addEventListener('click',()=>setSearch(searchInput.value,{ jumpToResul
 stickySearchBtn.addEventListener('click',()=>setSearch(stickySearchInput.value,{ jumpToResults:true }));
 searchInput.addEventListener('input',e=>setSearch(e.target.value));
 stickySearchInput.addEventListener('input',e=>setSearch(e.target.value));
-document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.intent=btn.dataset.intent;state.categoryFocus=null;render({ jumpToResults:true, resetVisible:true });}));
+document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');scrollToSection(intentSectionAnchors[btn.dataset.intent]);}));
 typeFilter.addEventListener('change',e=>{state.type=e.target.value;state.categoryFocus=null;render({ jumpToResults:true, resetVisible:true });});
 minPrice.addEventListener('input',e=>{state.min=e.target.value;state.categoryFocus=null;render({ jumpToResults:true, resetVisible:true });});
 maxPrice.addEventListener('input',e=>{state.max=e.target.value;state.categoryFocus=null;render({ jumpToResults:true, resetVisible:true });});
