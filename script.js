@@ -23,8 +23,8 @@ const properties = [
 {id:15,title:'Detached 4 Bedroom House — California Estate',category:'Houses',intent:'Buy',location:'California Estate',area:'Inner loop',price:33200000,priceType:'sale',beds:4,baths:3,size:'272m²',image:'https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=1100&q=80',badge:'For Sale',description:'Detached home with mature garden, servant quarter and private driveway.',features:['Parking','Family Friendly']},
 {id:16,title:'High-Density Redevelopment Plot — Section 1',category:'Land / Plots',intent:'Buy',location:'Eastleigh Section 1',area:'First Avenue commercial belt',price:168000000,priceType:'sale',beds:0,baths:0,size:'0.62 acres',image:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1100&q=80',badge:'Prime Plot',description:'Rare Eastleigh core plot ideal for mixed-use high-rise redevelopment.',features:['Commercial Use','New Development']}
 ];
-const STORAGE_KEYS = { saved: 'eastleigh_saved_properties', recent: 'eastleigh_recently_viewed' };
-const state = { intent: 'Buy', search: '', type: 'All Types', min: '', max: '', beds: 0, features: [], sort: 'newest', visibleCount: 0, saved: new Set(), recent: [], activePropertyId: null, formOpen: false, formSuccess: false, categoryFocus: null };
+const STORAGE_KEYS = { saved: 'eastleigh_saved_properties', recent: 'eastleigh_recently_viewed', session: 'eastleigh_user_session', draft: 'eastleigh_listing_draft', listings: 'eastleigh_user_listings' };
+const state = { intent: 'Buy', search: '', type: 'All Types', min: '', max: '', beds: 0, features: [], sort: 'newest', visibleCount: 0, saved: new Set(), recent: [], activePropertyId: null, formOpen: false, formSuccess: false, categoryFocus: null, user: null, listingDraft: {}, draftImages: [], myListingsOpen: false };
 const grid = document.getElementById('featuredGrid');
 const categoryCards = document.getElementById('categoryCards');
 const resultCount = document.getElementById('resultCount');
@@ -40,6 +40,46 @@ const landPropertiesGrid = document.getElementById('landPropertiesGrid');
 const formatPrice=(p,t)=>`KSh ${p.toLocaleString()}${t==='month'?' / month':''}`;
 const intentLabel = (property) => property.category === 'Land / Plots' ? (property.features.includes('Commercial Use') ? 'Commercial' : 'Investment') : property.intent === 'Rent' ? 'For Rent' : 'For Sale';
 const getProperty = (id) => properties.find((item) => item.id === Number(id));
+
+const accountMenuBtn = document.getElementById('accountMenuBtn');
+const accountMenu = document.getElementById('accountMenu');
+const ORIGINAL_DATASET_COUNT = 16;
+
+function userListingToProperty(item, idx){
+  return { id:item.id || Date.now()+idx, title:item.title, category:item.category, intent:item.intent, location:item.location, area:item.area, price:Number(item.price), priceType:item.intent==='Rent'?'month':'sale', beds:Number(item.beds)||0, baths:Number(item.baths)||0, size:item.size||'N/A', image:(item.images&&item.images[0])||'https://images.unsplash.com/photo-1560185009-dddeb820c7b7?auto=format&fit=crop&w=1100&q=80', badge:item.intent==='Rent'?'For Rent':'For Sale', description:item.description||'User submitted listing.', features:item.features?.length?item.features:['Family Friendly'], owner:item.owner };
+}
+
+function openAuthModal(){
+  closeListingFlows();
+  const modal=document.createElement('div'); modal.id='authModal'; modal.className='property-modal-backdrop';
+  modal.innerHTML=`<section class="property-modal slim-modal"><header class="modal-header"><button class="modal-close">×</button></header><div class="modal-body"><h3>Welcome back</h3><form id="authForm" class="wizard-form"><label>Name<input name="name" required></label><label>Email or Phone<input name="contact" required></label><button class="btn btn-gold" type="submit">Continue</button></form></div></section>`;
+  document.body.appendChild(modal); document.body.classList.add('modal-open');
+}
+function openListingWizard(stepOverride){
+  closeListingFlows();
+  const stepNames=['Basic Info','Location','Pricing/Specs','Images','Contact','Review'];
+  const draft=state.listingDraft||{};
+  const step=Number(stepOverride||draft.step||1);
+  const modal=document.createElement('div'); modal.id='listingWizardModal'; modal.className='property-modal-backdrop';
+  const imagePreviews=(state.draftImages||[]).map((src,i)=>`<figure class="upload-preview"><img src="${src}"><button type="button" data-remove-image="${i}">×</button></figure>`).join('');
+  modal.innerHTML=`<section class="property-modal"><header class="modal-header"><button class="modal-close">×</button></header><div class="modal-body"><div class="stepper">${stepNames.map((n,i)=>`<span class="${i+1===step?'active':''}">${i+1}. ${n}</span>`).join('')}</div><form id="listingWizardForm" class="wizard-form" data-step="${step}">${renderWizardStep(step,draft,imagePreviews)}<div class="wizard-actions"><button type="button" class="btn" data-wizard-back ${step===1?'disabled':''}>Back</button><button type="button" class="btn btn-gold" data-wizard-next>${step===6?'Submit':'Next'}</button></div></form></div></section>`;
+  document.body.appendChild(modal); document.body.classList.add('modal-open');
+}
+function renderWizardStep(step,draft,imagePreviews){
+ if(step===1) return `<div class="step-panel"><h4>Property Basics</h4><p>Start with the essentials buyers/tenants see first.</p><label>Title<input name="title" required value="${draft.title||''}"></label><div class="wizard-grid"><label>Intent<select name="intent"><option ${draft.intent==='Buy'?'selected':''}>Buy</option><option ${draft.intent==='Rent'?'selected':''}>Rent</option></select></label><label>Category<select name="category"><option ${draft.category==='Houses'?'selected':''}>Houses</option><option ${(!draft.category||draft.category==='Apartments')?'selected':''}>Apartments</option><option ${draft.category==='Land / Plots'?'selected':''}>Land / Plots</option></select></label></div></div>`;
+ if(step===2) return `<div class="step-panel"><h4>Location Details</h4><label>Location<input name="location" required value="${draft.location||''}"></label><label>Area / Landmark<input name="area" value="${draft.area||''}"></label><label>Description<textarea rows="4" name="description">${draft.description||''}</textarea></label></div>`;
+ if(step===3) return `<div class="step-panel"><h4>Pricing & Specs</h4><label>Price (KSh)<input type="number" name="price" required value="${draft.price||''}"></label><div class="wizard-grid wizard-grid-3"><label>Beds<input type="number" name="beds" value="${draft.beds||0}"></label><label>Baths<input type="number" name="baths" value="${draft.baths||0}"></label><label>Size<input name="size" value="${draft.size||''}"></label></div></div>`;
+ if(step===4) return `<div class="step-panel"><h4>Images</h4><label class="upload-dropzone">Drop images here or tap to upload<input type="file" id="listingImagesInput" multiple accept="image/*"></label><div class="upload-grid">${imagePreviews||'<p class="upload-empty">No images added yet.</p>'}</div></div>`;
+ if(step===5) return `<div class="step-panel"><h4>Contact</h4><label>Contact Name<input name="ownerName" required value="${draft.ownerName||state.user?.name||''}"></label><label>Phone/Email<input name="ownerContact" required value="${draft.ownerContact||state.user?.contact||''}"></label></div>`;
+ return `<div class="review-box"><h4>Review Listing</h4><p><strong>${draft.title||'Untitled listing'}</strong></p><p>${draft.intent||'Buy'} · ${draft.category||'Apartments'}</p><p>${draft.location||''} · ${draft.area||''}</p><p>KSh ${(Number(draft.price)||0).toLocaleString()}</p><p>${draft.beds||0} Beds · ${draft.baths||0} Baths · ${draft.size||'N/A'}</p><p>${state.draftImages.length} image(s) attached</p></div>`;
+}
+function openListingSuccess(id){const modal=document.createElement('div'); modal.id='listingSuccessModal'; modal.className='property-modal-backdrop'; modal.innerHTML=`<section class="property-modal slim-modal"><header class="modal-header"><button class="modal-close">×</button></header><div class="modal-body success-shell"><h3>Listing Published</h3><p>Your property is now visible in the marketplace.</p><div class="wizard-actions"><button class="btn btn-gold" data-success-view="${id}">View Listing</button><button class="btn" data-success-add="true">Add Another Property</button></div></div></section>`; document.body.appendChild(modal); document.body.classList.add('modal-open');}
+function closeListingFlows(){['authModal','listingWizardModal','myListingsModal','listingSuccessModal'].forEach(id=>document.getElementById(id)?.remove()); document.body.classList.remove('modal-open');}
+function persistDraft(){ localStorage.setItem(STORAGE_KEYS.draft,JSON.stringify({ ...state.listingDraft, images: state.draftImages })); }
+function saveSession(user){state.user=user; localStorage.setItem(STORAGE_KEYS.session,JSON.stringify(user)); updateAccountUI();}
+function updateAccountUI(){ if(!accountMenuBtn) return; const logged=!!state.user; accountMenuBtn.hidden=!logged; accountMenuBtn.textContent=logged?`${state.user.name.split(' ')[0]} ▾`:'Account ▾'; document.querySelectorAll('[data-list-trigger]').forEach(btn=>btn.textContent='List Your Property'); }
+function openMyListings(){ const mine=properties.filter(p=>p.owner?.contact===state.user?.contact); const modal=document.createElement('div'); modal.id='myListingsModal'; modal.className='property-modal-backdrop'; const cards=mine.length?mine.map((p)=>`<article class="my-listing-row"><span class="listing-status published">Published</span><h4>${p.title}</h4><p>${p.location} · ${p.area}</p><div class="my-listing-actions"><button class="btn" data-view-listing="${p.id}">View</button><button class="btn" data-delete-listing="${p.id}">Delete</button></div></article>`).join(''):`<div class="empty-my-listings"><h4>No listings yet</h4><p>Create your first property and it will appear here.</p><button class="btn btn-gold" data-edit-draft="true">Start Listing</button></div>`; modal.innerHTML=`<section class="property-modal slim-modal"><header class="modal-header"><button class="modal-close">×</button></header><div class="modal-body"><h3>My Listings</h3><div class="my-listings-wrap">${cards}</div><div class="my-listing-actions"><button class="btn" data-edit-draft="true">Edit Draft</button></div></div></section>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); }
+
 let stickyVisible = false;
 let tickingSticky = false;
 const scrollToResults = () => {
@@ -236,10 +276,33 @@ document.addEventListener('click', (event) => {
   if (event.target.matches('.schedule-viewing')) revealAndScrollToInquiryForm();
 });
 document.addEventListener('submit', (event) => {if (event.target.id !== 'inquiryForm') return;event.preventDefault();const form = event.target;if (!form.checkValidity()) {form.reportValidity();return;}state.formOpen = false;state.formSuccess = true;renderModal();});
-document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && state.activePropertyId) closeModal(true);});
+document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && state.activePropertyId) closeModal(true); if(event.key==='Escape') closeListingFlows();});
 
-try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id));} catch {}
+document.addEventListener('click',(event)=>{
+ if(event.target.matches('[data-list-trigger]')){ event.preventDefault(); if(!state.user) openAuthModal(); else openListingWizard(); }
+ if(event.target.id==='accountMenuBtn'){ accountMenu.hidden=!accountMenu.hidden; }
+ if(event.target.id==='logoutBtn'){ state.user=null; localStorage.removeItem(STORAGE_KEYS.session); accountMenu.hidden=true; updateAccountUI(); }
+ if(event.target.id==='myListingsBtn'){ accountMenu.hidden=true; openMyListings(); }
+ if(event.target.closest('#authModal .modal-close')||event.target.id==='authModal') closeListingFlows();
+ if(event.target.closest('#listingWizardModal .modal-close')||event.target.id==='listingWizardModal') { persistDraft(); closeListingFlows(); }
+ if(event.target.closest('#myListingsModal .modal-close')||event.target.id==='myListingsModal') closeListingFlows();
+ if(event.target.closest('#listingSuccessModal .modal-close')||event.target.id==='listingSuccessModal') closeListingFlows();
+ if(event.target.matches('[data-edit-draft]')){ closeListingFlows(); openListingWizard(); }
+ if(event.target.matches('[data-view-listing]')){ closeListingFlows(); openProperty(Number(event.target.dataset.viewListing), true); }
+ if(event.target.matches('[data-delete-listing]')){ const id=Number(event.target.dataset.deleteListing); const idx=properties.findIndex(p=>p.id===id); if(idx>-1) properties.splice(idx,1); const all=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]').filter(item=>Number(item.id)!==id); localStorage.setItem(STORAGE_KEYS.listings,JSON.stringify(all)); openMyListings(); render({resetVisible:true}); }
+ if(event.target.matches('[data-success-view]')){ closeListingFlows(); openProperty(Number(event.target.dataset.successView), true); }
+ if(event.target.matches('[data-success-add]')){ closeListingFlows(); openListingWizard(1); }
+ if(event.target.matches('[data-remove-image]')){ const idx=Number(event.target.dataset.removeImage); state.draftImages.splice(idx,1); persistDraft(); openListingWizard(); }
+ if(event.target.matches('[data-wizard-back]')){ const form=document.getElementById('listingWizardForm'); const step=Math.max(1,Number(form.dataset.step)-1); state.listingDraft.step=step; persistDraft(); openListingWizard(); }
+ if(event.target.matches('[data-wizard-next]')){ const form=document.getElementById('listingWizardForm'); const data=Object.fromEntries(new FormData(form).entries()); Object.assign(state.listingDraft,data); const step=Number(form.dataset.step); if(step<6){ state.listingDraft.step=step+1; persistDraft(); openListingWizard(); } else { const listing={...state.listingDraft, images:state.draftImages, id:Date.now(), owner:state.user}; properties.push(userListingToProperty(listing,0)); const all=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]'); all.push(listing); localStorage.setItem(STORAGE_KEYS.listings,JSON.stringify(all)); state.listingDraft={}; state.draftImages=[]; localStorage.removeItem(STORAGE_KEYS.draft); closeListingFlows(); openListingSuccess(listing.id); render({resetVisible:true}); } }
+});
+
+document.addEventListener('change',(event)=>{ if(event.target.id==='listingImagesInput'){ [...event.target.files].forEach(file=>{ const r=new FileReader(); r.onload=()=>{ state.draftImages.push(r.result); persistDraft(); openListingWizard(); }; r.readAsDataURL(file); }); }});
+
+document.addEventListener('submit',(event)=>{ if(event.target.id==='authForm'){ event.preventDefault(); const data=Object.fromEntries(new FormData(event.target).entries()); saveSession({name:data.name,contact:data.contact}); closeListingFlows(); openListingWizard(); }});
+
+try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id)); state.user=JSON.parse(localStorage.getItem(STORAGE_KEYS.session)||'null'); const draft=JSON.parse(localStorage.getItem(STORAGE_KEYS.draft)||'{}'); state.listingDraft=draft||{}; state.draftImages=draft.images||[]; const userListings=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]'); userListings.forEach((item,idx)=>properties.push(userListingToProperty(item,idx)));} catch {}
 const urlMatch=window.location.hash.match(/^#property-(\d+)$/); if(urlMatch && getProperty(urlMatch[1])) state.activePropertyId=Number(urlMatch[1]);
 state.visibleCount=getInitialVisibleCount();
 sortSelect.value=state.sort;
-setSearch(state.search); render({ resetVisible:true }); updateStickySearchVisibility(); if(state.activePropertyId) syncUrl(state.activePropertyId,false); else syncUrl(null,false);
+setSearch(state.search); render({ resetVisible:true }); updateStickySearchVisibility(); updateAccountUI(); if(properties.slice(0,ORIGINAL_DATASET_COUNT).length!==16){console.warn('Dataset integrity risk');} if(state.activePropertyId) syncUrl(state.activePropertyId,false); else syncUrl(null,false);
