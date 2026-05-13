@@ -102,3 +102,26 @@
 .stepper span{display:flex;align-items:center;justify-content:center;min-height:44px;font-weight:600}
 .wizard-actions{align-items:center}
 .wizard-actions .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none}
+
+/* Phase 4B-9: premium property modal details */
+.modal-content-premium{gap:12px;padding:4px 2px 2px}
+.modal-content-premium .modal-intent{align-self:flex-start;padding:6px 12px;border-radius:999px;background:linear-gradient(140deg,#fbf1d8,#f2ddb0);border:1px solid rgba(184,138,43,.38);color:#5d451f;font-size:.76rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.modal-content-premium h3{margin:2px 0 0;font-size:1.52rem;line-height:1.22;color:#2e2418}
+.modal-location{display:grid;gap:4px;margin:0;color:#5b4a35}
+.location-label{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9a7a3a}
+.modal-price-line{margin:0;font-size:1.38rem;font-weight:800;color:#b88a2b}
+.modal-specs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.spec-card{margin:0;border:1px solid rgba(184,138,43,.25);background:linear-gradient(180deg,#fffef9,#fff6e7);padding:9px 10px;border-radius:12px}
+.spec-card h5{margin:0 0 4px;font-size:.71rem;letter-spacing:.06em;text-transform:uppercase;color:#8a6a32}
+.spec-card p{margin:0;font-size:.95rem;font-weight:600;color:#3a2d1e}
+.modal-copy-section h4{margin:2px 0 7px;font-size:.93rem;letter-spacing:.08em;text-transform:uppercase;color:#8a6a32}
+.modal-description{margin:0;line-height:1.62;color:#4f4337}
+.feature-list{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
+.feature-list li{padding:7px 11px;border-radius:999px;background:#fff6df;border:1px solid rgba(184,138,43,.34);font-size:.84rem;font-weight:600;color:#5d4a2b}
+.agent-card{margin-top:2px;border:1px solid rgba(184,138,43,.35);background:linear-gradient(160deg,#fff8e9,#fef3da);padding:12px;border-radius:14px}
+.agent-card h4{margin:0 0 8px;font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:#8a6a32}
+.agent-card p{margin:0;display:flex;gap:8px;flex-wrap:wrap;color:#4e3d28}
+.agent-card p + p{margin-top:6px}
+.agent-card span{color:#6d5a43}
+.modal-actions{margin-top:4px}
+@media (max-width:768px){.modal-content-premium h3{font-size:1.28rem}.modal-price-line{font-size:1.2rem}.modal-specs-grid{grid-template-columns:1fr 1fr;gap:7px}}
