@@ -124,9 +124,10 @@ function applyCategoryFocus(categoryName){
 const propertyCard=(p)=>`<article class="property-card fade-in" data-property-id="${p.id}" tabindex="0"><img src="${p.image}" alt="${p.title}"/><span class="badge ${p.priceType==='month'?'rent':''}">${p.badge}</span><button class="fav ${state.saved.has(p.id) ? 'active' : ''}" type="button" data-fav-id="${p.id}" aria-label="Save ${p.title}">${state.saved.has(p.id) ? '♥' : '♡'}</button><div class="card-body"><h3>${p.title}</h3><p>${p.location} · ${p.area}</p><strong>${formatPrice(p.price,p.priceType)}</strong><small>${p.category==='Land / Plots'?p.size:`${p.beds} Beds · ${p.baths} Baths · ${p.size}`}</small><em>${p.description}</em></div></article>`;
 
 function persistState(){localStorage.setItem(STORAGE_KEYS.saved,JSON.stringify([...state.saved]));localStorage.setItem(STORAGE_KEYS.recent,JSON.stringify(state.recent));}
-function syncUrl(id, push=true){const hash=id?`#property-${id}`:'#'; if(push) history.pushState({propertyId:id||null},'',hash); else history.replaceState({propertyId:id||null},'',hash);}
-function openProperty(id,push=true){if(!getProperty(id)) return; state.activePropertyId=Number(id);state.formOpen=false;state.formSuccess=false;state.recent=[Number(id),...state.recent.filter(item=>item!==Number(id))].slice(0,6);persistState();syncUrl(id,push);renderModal();renderRecent();}
-function closeModal(push=true){state.activePropertyId=null; state.formOpen=false; state.formSuccess=false; renderModal(); if(push)syncUrl(null,true);}
+function syncUrl(id, push=true){const hash=id?`#property-${id}`:'#'; const statePayload={propertyId:id||null}; if(push) history.pushState(statePayload,'',hash); else history.replaceState(statePayload,'',hash);}
+function hasModalHash(){return /^#property-(\d+)$/.test(window.location.hash);}
+function openProperty(id,push=true){if(!getProperty(id)) return; const nextId=Number(id); const hadModalOpen=!!state.activePropertyId; state.activePropertyId=nextId;state.formOpen=false;state.formSuccess=false;state.recent=[nextId,...state.recent.filter(item=>item!==nextId)].slice(0,6);persistState(); if(push){const isSameHash=window.location.hash===`#property-${nextId}`; if(!isSameHash){syncUrl(nextId, !hadModalOpen);} else if((history.state?.propertyId ?? null)!==nextId){syncUrl(nextId,false);} } renderModal();renderRecent();}
+function closeModal(push=true){if(!state.activePropertyId) return; state.activePropertyId=null; state.formOpen=false; state.formSuccess=false; renderModal(); if(!push) return; if(hasModalHash() && history.state?.propertyId){history.back(); return;} if(hasModalHash()){syncUrl(null,false);} }
 
 function renderModal() {
   const existing = document.getElementById('propertyDetailModal'); existing?.remove();
@@ -207,7 +208,7 @@ document.getElementById('clearFilters').addEventListener('click',clearFilters);
 sortSelect.addEventListener('change',(e)=>{state.sort=e.target.value;render({ jumpToResults:true, resetVisible:true });});
 loadMoreBtn.addEventListener('click',()=>{state.visibleCount += getVisibleStep(); render();});
 window.addEventListener('resize',()=>{if(state.visibleCount<getInitialVisibleCount()) state.visibleCount=getInitialVisibleCount();});
-window.addEventListener('popstate',()=>{const match=window.location.hash.match(/^#property-(\d+)$/); if(match){state.activePropertyId=Number(match[1]);renderModal();} else if(state.activePropertyId){state.activePropertyId=null;renderModal();}});
+window.addEventListener('popstate',()=>{const match=window.location.hash.match(/^#property-(\d+)$/); if(match && getProperty(match[1])){state.activePropertyId=Number(match[1]);state.formOpen=false;state.formSuccess=false;renderModal();return;} if(state.activePropertyId){state.activePropertyId=null;state.formOpen=false;state.formSuccess=false;renderModal();}});
 
 document.addEventListener('click', (event) => {
   const categoryButton = event.target.closest('[data-category]');
@@ -241,4 +242,4 @@ try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) |
 const urlMatch=window.location.hash.match(/^#property-(\d+)$/); if(urlMatch && getProperty(urlMatch[1])) state.activePropertyId=Number(urlMatch[1]);
 state.visibleCount=getInitialVisibleCount();
 sortSelect.value=state.sort;
-setSearch(state.search); render({ resetVisible:true }); updateStickySearchVisibility(); if(state.activePropertyId) syncUrl(state.activePropertyId,false);
+setSearch(state.search); render({ resetVisible:true }); updateStickySearchVisibility(); if(state.activePropertyId) syncUrl(state.activePropertyId,false); else syncUrl(null,false);
