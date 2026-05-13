@@ -1,5 +1,9 @@
 const toggle = document.querySelector('.menu-toggle');
 const drawer = document.getElementById('mobileDrawer');
+const mobileBackdrop = document.getElementById('mobileBackdrop');
+const hero = document.querySelector('.hero');
+const stickySearch = document.getElementById('stickySearch');
+const stickySearchInput = document.getElementById('stickySearchInput');
 
 const properties = [
 {id:1,title:'Family Maisonette Near General Waruinge Street',category:'Houses',intent:'Buy',location:'Eastleigh Section 1',area:'General Waruinge corridor',price:26800000,priceType:'sale',beds:4,baths:3,size:'232m²',image:'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1100&q=80',badge:'Verified Sale',description:'Corner maisonette in a secure court with steady water and covered parking.',features:['Parking','Family Friendly']},
@@ -19,50 +23,61 @@ const properties = [
 {id:15,title:'Detached 4 Bedroom House — California Estate',category:'Houses',intent:'Buy',location:'California Estate',area:'Inner loop',price:33200000,priceType:'sale',beds:4,baths:3,size:'272m²',image:'https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=1100&q=80',badge:'For Sale',description:'Detached home with mature garden, servant quarter and private driveway.',features:['Parking','Family Friendly']},
 {id:16,title:'High-Density Redevelopment Plot — Section 1',category:'Land / Plots',intent:'Buy',location:'Eastleigh Section 1',area:'First Avenue commercial belt',price:168000000,priceType:'sale',beds:0,baths:0,size:'0.62 acres',image:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1100&q=80',badge:'Prime Plot',description:'Rare Eastleigh core plot ideal for mixed-use high-rise redevelopment.',features:['Commercial Use','New Development']}
 ];
-
-const state = { intent: 'Buy', search: '', type: 'All Types', min: '', max: '', beds: 0, features: [], saved: new Set(), activePropertyId: null, formOpen: false, formSuccess: false };
-
+const STORAGE_KEYS = { saved: 'eastleigh_saved_properties', recent: 'eastleigh_recently_viewed' };
+const state = { intent: 'Buy', search: '', type: 'All Types', min: '', max: '', beds: 0, features: [], saved: new Set(), recent: [], activePropertyId: null, formOpen: false, formSuccess: false };
 const grid = document.getElementById('featuredGrid');
 const categoryCards = document.getElementById('categoryCards');
 const resultCount = document.getElementById('resultCount');
+const recentWrap = document.getElementById('recentlyViewedWrap');
+const recentGrid = document.getElementById('recentlyViewedGrid');
 const formatPrice=(p,t)=>`KSh ${p.toLocaleString()}${t==='month'?' / month':''}`;
 const intentLabel = (property) => property.category === 'Land / Plots' ? (property.features.includes('Commercial Use') ? 'Commercial' : 'Investment') : property.intent === 'Rent' ? 'For Rent' : 'For Sale';
+const getProperty = (id) => properties.find((item) => item.id === Number(id));
 
 function applyFilters(){return properties.filter((p)=>{if(state.intent==='Land / Plots'){if(p.category!=='Land / Plots')return false;} else if(p.intent!==state.intent)return false; if(state.type!=='All Types'&&p.category!==state.type)return false; if(state.min&&p.price<Number(state.min))return false; if(state.max&&p.price>Number(state.max))return false; if(state.beds>0&&p.category!=='Land / Plots'&&p.beds<state.beds)return false; if(state.features.length&&!state.features.every(f=>p.features.includes(f)))return false; const hay=`${p.title} ${p.location} ${p.category} ${p.area} ${p.features.join(' ')} ${p.description}`.toLowerCase(); if(state.search&&!hay.includes(state.search.toLowerCase()))return false; return true;});}
 function renderCategories(filtered){const cards=[{name:'Houses',count:filtered.filter(p=>p.category==='Houses').length,img:'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80'},{name:'Apartments',count:filtered.filter(p=>p.category==='Apartments').length,img:'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?auto=format&fit=crop&w=1200&q=80'},{name:'Land / Plots',count:filtered.filter(p=>p.category==='Land / Plots').length,img:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80'},{name:'Commercial Spaces',count:filtered.filter(p=>p.features.includes('Commercial Use')).length,img:'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80'},{name:'Rental Units',count:filtered.filter(p=>p.intent==='Rent').length,img:'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80'}];categoryCards.innerHTML=cards.map(c=>`<article class="image-card"><img src="${c.img}" alt="${c.name}"/><div><h3>${c.name}</h3><p>${c.count} listings</p></div></article>`).join('');}
+const propertyCard=(p)=>`<article class="property-card fade-in" data-property-id="${p.id}" tabindex="0"><img src="${p.image}" alt="${p.title}"/><span class="badge ${p.priceType==='month'?'rent':''}">${p.badge}</span><button class="fav ${state.saved.has(p.id) ? 'active' : ''}" type="button" data-fav-id="${p.id}" aria-label="Save ${p.title}">${state.saved.has(p.id) ? '♥' : '♡'}</button><div class="card-body"><h3>${p.title}</h3><p>${p.location} · ${p.area}</p><strong>${formatPrice(p.price,p.priceType)}</strong><small>${p.category==='Land / Plots'?p.size:`${p.beds} Beds · ${p.baths} Baths · ${p.size}`}</small><em>${p.description}</em></div></article>`;
+
+function persistState(){localStorage.setItem(STORAGE_KEYS.saved,JSON.stringify([...state.saved]));localStorage.setItem(STORAGE_KEYS.recent,JSON.stringify(state.recent));}
+function syncUrl(id, push=true){const hash=id?`#property-${id}`:'#'; if(push) history.pushState({propertyId:id||null},'',hash); else history.replaceState({propertyId:id||null},'',hash);}
+function openProperty(id,push=true){if(!getProperty(id)) return; state.activePropertyId=Number(id);state.formOpen=false;state.formSuccess=false;state.recent=[Number(id),...state.recent.filter(item=>item!==Number(id))].slice(0,6);persistState();syncUrl(id,push);renderModal();renderRecent();}
+function closeModal(push=true){state.activePropertyId=null; state.formOpen=false; state.formSuccess=false; renderModal(); if(push)syncUrl(null,true);}
 
 function renderModal() {
-  const existing = document.getElementById('propertyDetailModal');
-  existing?.remove();
-  const property = properties.find((item) => item.id === state.activePropertyId);
-  if (!property) {
-    document.body.classList.remove('modal-open');
-    return;
-  }
-  document.body.classList.add('modal-open');
+  const existing = document.getElementById('propertyDetailModal'); existing?.remove();
+  const property = getProperty(state.activePropertyId);
+  document.body.classList.toggle('modal-open', !!property);
+  if (!property) return;
   const isSaved = state.saved.has(property.id);
   const thumbs = [property.image, ...properties.filter((item) => item.category === property.category && item.id !== property.id).slice(0, 2).map((item) => item.image)];
   const formPanel = state.formOpen ? `<section class="inquiry-form-shell"><h4>Schedule Viewing / Request Details</h4><form id="inquiryForm"><label>Full Name<input name="fullName" required type="text" placeholder="e.g. Amina Hassan"/></label><label>Phone Number<input name="phone" required type="tel" placeholder="+254 712 345 678"/></label><label>Preferred Viewing Date<input name="date" required type="date"/></label><label>Inquiry Type<select name="inquiryType" required><option value="">Select inquiry type</option><option>Schedule Viewing</option><option>Request More Details</option><option>Price Negotiation</option><option>Agent Callback</option></select></label><label>Message<textarea name="message" required rows="3" placeholder="Tell us what you need for this property."></textarea></label><button type="submit" class="btn btn-gold">Submit Request</button></form></section>` : '';
   const successPanel = state.formSuccess ? `<div class="form-success"><h4>Request prepared successfully.</h4><p>Backend submission will be connected in production for <strong>${property.title}</strong>.</p></div>` : '';
   const modal = document.createElement('div');
-  modal.id = 'propertyDetailModal';
-  modal.className = 'property-modal-backdrop';
+  modal.id = 'propertyDetailModal'; modal.className = 'property-modal-backdrop';
   const message = encodeURIComponent(`Hello Eastleigh Properties, I'm interested in ${property.title} listed at ${formatPrice(property.price,property.priceType)}. Please share more details.`);
-  modal.innerHTML = `<section class="property-modal" role="dialog" aria-modal="true" aria-labelledby="propertyModalTitle"><button type="button" class="modal-close" aria-label="Close property details">×</button><div class="modal-media"><img src="${property.image}" alt="${property.title}"/><div class="thumbs">${thumbs.map((image, i) => `<img src="${image}" alt="Property view ${i + 1}"/>`).join('')}</div></div><div class="modal-content"><span class="modal-intent">${intentLabel(property)}</span><h3 id="propertyModalTitle">${property.title}</h3><p class="modal-location">${property.location} · ${property.area}</p><strong>${formatPrice(property.price,property.priceType)}</strong><p class="modal-meta">${property.category} · ${property.category === 'Land / Plots' ? property.size : `${property.beds} Beds · ${property.baths} Baths · ${property.size}`}</p><p class="modal-description">${property.description}</p><ul class="feature-list">${property.features.map((feature) => `<li>${feature}</li>`).join('')}</ul><p class="trust-note">Verified listing details prepared for demo.</p><article class="agent-card"><h4>Your Eastleigh Agent</h4><p><strong>Nadia Yusuf</strong> · Senior Property Advisor</p><p>Call: +254 711 804 225</p></article><div class="modal-actions"><button type="button" class="btn ${isSaved ? '' : 'btn-gold'} save-modal">${isSaved ? 'Saved Property ♥' : 'Save Property'}</button><button type="button" class="btn btn-gold contact-agent">Contact Agent</button><a class="btn btn-gold" target="_blank" rel="noopener" href="https://wa.me/254711804225?text=${message}">WhatsApp Agent</a><button type="button" class="btn btn-gold schedule-viewing">Schedule Viewing</button></div><div class="contact-toast" hidden>Agent Nadia Yusuf · +254 711 804 225 · eastleigh.demo@broker.co.ke</div>${formPanel}${successPanel}</div></section>`;
+  modal.innerHTML = `<section class="property-modal" role="dialog" aria-modal="true" aria-labelledby="propertyModalTitle"><button type="button" class="modal-close" aria-label="Close property details">×</button><div class="modal-media"><img src="${property.image}" alt="${property.title}"/><div class="thumbs">${thumbs.map((image, i) => `<img src="${image}" alt="Property view ${i + 1}"/>`).join('')}</div></div><div class="modal-content"><span class="modal-intent">${intentLabel(property)}</span><h3 id="propertyModalTitle">${property.title}</h3><p class="modal-location">${property.location} · ${property.area}</p><strong>${formatPrice(property.price,property.priceType)}</strong><p class="modal-meta">${property.category} · ${property.category === 'Land / Plots' ? property.size : `${property.beds} Beds · ${property.baths} Baths · ${property.size}`}</p><p class="modal-description">${property.description}</p><ul class="feature-list">${property.features.map((feature) => `<li>${feature}</li>`).join('')}</ul><article class="agent-card"><h4>Your Eastleigh Agent</h4><p><strong>Nadia Yusuf</strong> · Senior Property Advisor</p><p>Call: +254 711 804 225</p></article><div class="modal-actions"><button type="button" class="btn ${isSaved ? '' : 'btn-gold'} save-modal">${isSaved ? 'Saved Property ♥' : 'Save Property'}</button><button type="button" class="btn btn-gold contact-agent">Contact Agent</button><a class="btn btn-gold" target="_blank" rel="noopener" href="https://wa.me/254711804225?text=${message}">WhatsApp Agent</a><button type="button" class="btn btn-gold schedule-viewing">Schedule Viewing</button></div><div class="contact-toast" hidden>Agent Nadia Yusuf · +254 711 804 225 · eastleigh.demo@broker.co.ke</div>${formPanel}${successPanel}</div></section>`;
   document.body.appendChild(modal);
 }
 
-function render(){const filtered=applyFilters(); if(!filtered.length){grid.innerHTML=`<article class="empty-state"><h3>No matching properties found</h3><p>Try broadening your search or reset the filters.</p><button id="clearFromEmpty" class="btn btn-gold" type="button">Clear filters</button></article>`;} else {grid.innerHTML=filtered.slice(0,8).map(p=>`<article class="property-card" data-property-id="${p.id}" tabindex="0"><img src="${p.image}" alt="${p.title}"/><span class="badge ${p.priceType==='month'?'rent':''}">${p.badge}</span><button class="fav ${state.saved.has(p.id) ? 'active' : ''}" type="button" data-fav-id="${p.id}" aria-label="Save ${p.title}">${state.saved.has(p.id) ? '♥' : '♡'}</button><div class="card-body"><h3>${p.title}</h3><p>${p.location} · ${p.area}</p><strong>${formatPrice(p.price,p.priceType)}</strong><small>${p.category==='Land / Plots'?p.size:`${p.beds} Beds · ${p.baths} Baths · ${p.size}`}</small><em>${p.description}</em></div></article>`).join('');}
-resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories(filtered);document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); renderModal();}
+function renderRecent(){const items=state.recent.map(getProperty).filter(Boolean); if(!items.length){recentWrap.style.display='none'; return;} recentWrap.style.display='block'; recentGrid.innerHTML=items.map(propertyCard).join('');}
+function render(){const filtered=applyFilters(); grid.innerHTML=!filtered.length?`<article class="empty-state"><h3>No matching properties found</h3><p>Try broadening your search or reset the filters.</p><button id="clearFromEmpty" class="btn btn-gold" type="button">Clear filters</button></article>`:filtered.slice(0,8).map(propertyCard).join('');
+resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':state.intent==='Land / Plots'?'land / plots':'properties'} shown`;renderCategories(filtered);renderRecent();document.getElementById('clearFromEmpty')?.addEventListener('click',clearFilters); renderModal();}
 
-function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];searchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render();}
-function toggleSaved(id){if(state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); render();}
-function closeModal(){state.activePropertyId=null; state.formOpen=false; state.formSuccess=false; renderModal();}
+function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];searchInput.value='';stickySearchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render();}
+function toggleSaved(id){if(state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); persistState(); render();}
+function setSearch(value){state.search=value.trim();searchInput.value=state.search;stickySearchInput.value=state.search;render();}
+function setDrawer(open){drawer.classList.toggle('open',open);mobileBackdrop.classList.toggle('open',open);document.body.classList.toggle('drawer-open',open);toggle.setAttribute('aria-expanded',String(open));}
 
-toggle?.addEventListener('click',()=>drawer.classList.toggle('open'));
+toggle?.addEventListener('click',()=>setDrawer(!drawer.classList.contains('open')));
+mobileBackdrop.addEventListener('click',()=>setDrawer(false));
+drawer.querySelectorAll('a,button').forEach(el=>el.addEventListener('click',()=>setDrawer(false)));
+window.addEventListener('scroll',()=>stickySearch.classList.toggle('visible',window.scrollY>(hero?.offsetHeight||420)-120));
+
+searchBtn.addEventListener('click',()=>setSearch(searchInput.value));
+stickySearchBtn.addEventListener('click',()=>setSearch(stickySearchInput.value));
+searchInput.addEventListener('input',e=>setSearch(e.target.value));
+stickySearchInput.addEventListener('input',e=>setSearch(e.target.value));
 document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.intent=btn.dataset.intent;render();}));
-
-searchInput.addEventListener('input',e=>{state.search=e.target.value;render();});
 typeFilter.addEventListener('change',e=>{state.type=e.target.value;render();});
 minPrice.addEventListener('input',e=>{state.min=e.target.value;render();});
 maxPrice.addEventListener('input',e=>{state.max=e.target.value;render();});
@@ -71,49 +86,21 @@ moreFiltersBtn.addEventListener('click',()=>moreFilters.classList.toggle('open')
 document.querySelectorAll('#moreFilters input').forEach(i=>i.addEventListener('change',()=>{state.features=[...document.querySelectorAll('#moreFilters input:checked')].map(n=>n.value);render();}));
 document.getElementById('clearFilters').addEventListener('click',clearFilters);
 
+window.addEventListener('popstate',()=>{const match=window.location.hash.match(/^#property-(\d+)$/); if(match){state.activePropertyId=Number(match[1]);renderModal();} else if(state.activePropertyId){state.activePropertyId=null;renderModal();}});
+
 document.addEventListener('click', (event) => {
   const favButton = event.target.closest('[data-fav-id]');
-  if (favButton) {
-    toggleSaved(Number(favButton.dataset.favId));
-    event.stopPropagation();
-    return;
-  }
+  if (favButton) {toggleSaved(Number(favButton.dataset.favId));event.stopPropagation();return;}
   const card = event.target.closest('.property-card');
-  if (card) {
-    state.activePropertyId = Number(card.dataset.propertyId);
-    state.formOpen = false;
-    state.formSuccess = false;
-    renderModal();
-    return;
-  }
-  if (event.target.matches('.modal-close') || event.target.id === 'propertyDetailModal') closeModal();
+  if (card) {openProperty(Number(card.dataset.propertyId), true);return;}
+  if (event.target.matches('.modal-close') || event.target.id === 'propertyDetailModal') closeModal(true);
   if (event.target.matches('.save-modal')) toggleSaved(state.activePropertyId);
-  if (event.target.matches('.contact-agent')) {
-    const toast = document.querySelector('.contact-toast');
-    if (toast) toast.hidden = !toast.hidden;
-  }
-  if (event.target.matches('.schedule-viewing')) {
-    state.formOpen = true;
-    state.formSuccess = false;
-    renderModal();
-  }
+  if (event.target.matches('.contact-agent')) {const toast = document.querySelector('.contact-toast'); if (toast) toast.hidden = !toast.hidden;}
+  if (event.target.matches('.schedule-viewing')) {state.formOpen = true;state.formSuccess = false;renderModal();}
 });
+document.addEventListener('submit', (event) => {if (event.target.id !== 'inquiryForm') return;event.preventDefault();const form = event.target;if (!form.checkValidity()) {form.reportValidity();return;}state.formOpen = false;state.formSuccess = true;renderModal();});
+document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && state.activePropertyId) closeModal(true);});
 
-document.addEventListener('submit', (event) => {
-  if (event.target.id !== 'inquiryForm') return;
-  event.preventDefault();
-  const form = event.target;
-  if (!form.checkValidity()) {
-    form.reportValidity();
-    return;
-  }
-  state.formOpen = false;
-  state.formSuccess = true;
-  renderModal();
-});
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && state.activePropertyId) closeModal();
-});
-
-render();
+try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id));} catch {}
+const urlMatch=window.location.hash.match(/^#property-(\d+)$/); if(urlMatch && getProperty(urlMatch[1])) state.activePropertyId=Number(urlMatch[1]);
+setSearch(state.search); render(); if(state.activePropertyId) syncUrl(state.activePropertyId,false);
