@@ -1,6 +1,7 @@
 const toggle = document.querySelector('.menu-toggle');
 const drawer = document.getElementById('mobileDrawer');
 const mobileBackdrop = document.getElementById('mobileBackdrop');
+const drawerCloseBtn = document.getElementById('drawerCloseBtn');
 const hero = document.querySelector('.hero');
 const stickySearch = document.getElementById('stickySearch');
 const stickySearchInput = document.getElementById('stickySearchInput');
@@ -204,7 +205,7 @@ const propertyCard=(p)=>`<article class="property-card fade-in" data-property-id
 function persistState(){localStorage.setItem(STORAGE_KEYS.saved,JSON.stringify([...state.saved]));localStorage.setItem(STORAGE_KEYS.recent,JSON.stringify(state.recent));}
 function syncUrl(id, push=true){const hash=id?`#property-${id}`:'#'; const statePayload={propertyId:id||null}; if(push) history.pushState(statePayload,'',hash); else history.replaceState(statePayload,'',hash);}
 function hasModalHash(){return /^#property-(\d+)$/.test(window.location.hash);}
-function openProperty(id,push=true){if(!getProperty(id)) return; const nextId=Number(id); const hadModalOpen=!!state.activePropertyId; state.activePropertyId=nextId;state.formOpen=false;state.formSuccess=false;state.recent=[nextId,...state.recent.filter(item=>item!==nextId)].slice(0,6);persistState(); if(push){const isSameHash=window.location.hash===`#property-${nextId}`; if(!isSameHash){syncUrl(nextId, !hadModalOpen);} else if((history.state?.propertyId ?? null)!==nextId){syncUrl(nextId,false);} } renderModal();renderRecent();}
+function openProperty(id,push=true){if(!getProperty(id)) return; setDrawer(false); const nextId=Number(id); const hadModalOpen=!!state.activePropertyId; state.activePropertyId=nextId;state.formOpen=false;state.formSuccess=false;state.recent=[nextId,...state.recent.filter(item=>item!==nextId)].slice(0,6);persistState(); if(push){const isSameHash=window.location.hash===`#property-${nextId}`; if(!isSameHash){syncUrl(nextId, !hadModalOpen);} else if((history.state?.propertyId ?? null)!==nextId){syncUrl(nextId,false);} } renderModal();renderRecent();}
 function closeModal(push=true){if(!state.activePropertyId) return; state.activePropertyId=null; state.formOpen=false; state.formSuccess=false; renderModal(); if(!push) return; if(hasModalHash() && history.state?.propertyId){history.back(); return;} if(hasModalHash()){syncUrl(null,false);} }
 
 function renderModal() {
@@ -248,7 +249,11 @@ resultCount.textContent=`${filtered.length} ${state.intent==='Rent'?'rentals':st
 function clearFilters(){state.search='';state.type='All Types';state.min='';state.max='';state.beds=0;state.features=[];state.categoryFocus=null;searchInput.value='';stickySearchInput.value='';typeFilter.value='All Types';minPrice.value='';maxPrice.value='';bedsFilter.value='0';document.querySelectorAll('#moreFilters input').forEach(i=>i.checked=false);render({ jumpToResults:true, resetVisible:true });}
 function toggleSaved(id){if(state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); persistState(); render();}
 function setSearch(value,{jumpToResults=false}={}){state.search=value.trim();searchInput.value=state.search;stickySearchInput.value=state.search;render({ jumpToResults, resetVisible:true });}
-function setDrawer(open){if(open) closeAccountPanel();drawer.classList.toggle('open',open);mobileBackdrop.classList.toggle('open',open);document.body.classList.toggle('drawer-open',open);toggle.setAttribute('aria-expanded',String(open));}
+function setDrawer(open){if(open) closeAccountPanel();drawer.classList.toggle('open',open);drawer.setAttribute('aria-hidden',String(!open));mobileBackdrop.classList.toggle('open',open);document.body.classList.toggle('drawer-open',open);toggle.setAttribute('aria-expanded',String(open));}
+function handleNavTarget(navTarget){
+  if(!navTarget) return;
+  scrollToSection(navTarget);
+}
 function updateStickySearchVisibility(){
   const heroBottom = hero?.getBoundingClientRect().bottom ?? 0;
   const headerHeight = document.querySelector('.site-header')?.offsetHeight || 0;
@@ -265,7 +270,8 @@ function onScrollSticky(){
 
 toggle?.addEventListener('click',()=>{ closeAccountPanel(); setDrawer(!drawer.classList.contains('open')); });
 mobileBackdrop.addEventListener('click',()=>setDrawer(false));
-drawer.querySelectorAll('a,button').forEach(el=>el.addEventListener('click',()=>setDrawer(false)));
+drawerCloseBtn?.addEventListener('click',()=>setDrawer(false));
+document.querySelectorAll('[data-nav-target]').forEach((el)=>el.addEventListener('click',(event)=>{event.preventDefault();handleNavTarget(el.dataset.navTarget);setDrawer(false);}));
 window.addEventListener('scroll',onScrollSticky,{ passive:true });
 window.addEventListener('resize',onScrollSticky);
 
@@ -314,10 +320,10 @@ document.addEventListener('click', (event) => {
   if (event.target.matches('.schedule-viewing')) revealAndScrollToInquiryForm();
 });
 document.addEventListener('submit', (event) => {if (event.target.id !== 'inquiryForm') return;event.preventDefault();const form = event.target;if (!form.checkValidity()) {form.reportValidity();return;}state.formOpen = false;state.formSuccess = true;renderModal();});
-document.addEventListener('keydown', (event) => {if(event.key!=='Escape') return; closeAccountPanel(); if (state.activePropertyId) closeModal(true); closeListingFlows();});
+document.addEventListener('keydown', (event) => {if(event.key!=='Escape') return; setDrawer(false); closeAccountPanel(); if (state.activePropertyId) closeModal(true); closeListingFlows();});
 
 document.addEventListener('click',(event)=>{
- if(event.target.matches('[data-list-trigger]')){ event.preventDefault(); if(!state.user) openAuthModal(); else openListingWizard(); }
+ if(event.target.matches('[data-list-trigger]')){ event.preventDefault(); setDrawer(false); if(!state.user) openAuthModal(); else openListingWizard(); }
  if(event.target.id==='accountPanelBtn' || event.target.closest('#accountPanelBtn')){ openAccountPanel(); return; }
  if(event.target.id==='listAnotherBtn'){ closeAccountPanel(); openListingWizard(1); }
  if(event.target.id==='logoutBtn'){ state.user=null; localStorage.removeItem(STORAGE_KEYS.session); closeAccountPanel(); updateAccountUI(); }
