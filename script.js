@@ -44,18 +44,38 @@ const getProperty = (id) => properties.find((item) => item.id === Number(id));
 const accountMenuBtn = document.getElementById('accountMenuBtn');
 const accountMenu = document.getElementById('accountMenu');
 const ORIGINAL_DATASET_COUNT = 16;
+const AUTH_STORAGE_VERSION = 1;
+
+function getStoredSession(){
+  try{
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.session) || 'null');
+    if(!parsed || typeof parsed !== 'object') return null;
+    const name = typeof parsed.name === 'string' ? parsed.name.trim() : '';
+    const contact = typeof parsed.contact === 'string' ? parsed.contact.trim() : '';
+    if(!name || !contact) return null;
+    return { name, contact, authVersion: AUTH_STORAGE_VERSION };
+  } catch { return null; }
+}
+
+function closeAccountDropdown(){
+  if(!accountMenuBtn || !accountMenu) return;
+  accountMenu.hidden = true;
+  accountMenuBtn.classList.remove('open');
+}
 
 function userListingToProperty(item, idx){
   return { id:item.id || Date.now()+idx, title:item.title, category:item.category, intent:item.intent, location:item.location, area:item.area, price:Number(item.price), priceType:item.intent==='Rent'?'month':'sale', beds:Number(item.beds)||0, baths:Number(item.baths)||0, size:item.size||'N/A', image:(item.images&&item.images[0])||'https://images.unsplash.com/photo-1560185009-dddeb820c7b7?auto=format&fit=crop&w=1100&q=80', badge:item.intent==='Rent'?'For Rent':'For Sale', description:item.description||'User submitted listing.', features:item.features?.length?item.features:['Family Friendly'], owner:item.owner };
 }
 
 function openAuthModal(){
+  closeAccountDropdown();
   closeListingFlows();
   const modal=document.createElement('div'); modal.id='authModal'; modal.className='property-modal-backdrop';
   modal.innerHTML=`<section class="property-modal auth-modal-card"><header class="modal-header modal-header-clean"><button class="modal-close" aria-label="Close">×</button></header><div class="modal-body"><div class="auth-modal-head"><h3>List your property</h3><p>Create a quick seller profile before adding your property.</p></div><form id="authForm" class="wizard-form auth-form"><label><span>Full name</span><input name="name" placeholder="Enter your full name" required></label><label><span>Phone or email</span><input name="contact" placeholder="e.g. +254... or name@email.com" required></label><button class="btn btn-gold auth-submit" type="submit">Continue to listing</button><small class="auth-helper">Frontend demo only — saved locally for portfolio preview.</small></form></div></section>`;
   document.body.appendChild(modal); document.body.classList.add('modal-open');
 }
 function openListingWizard(stepOverride){
+  closeAccountDropdown();
   closeListingFlows();
   const stepNames=['Basic Info','Location','Pricing','Images','Contact','Review'];
   const draft=state.listingDraft||{};
@@ -74,10 +94,15 @@ function renderWizardStep(step,draft,imagePreviews){
  return `<div class="review-box"><h4>Review Listing</h4><p><strong>${draft.title||'Untitled listing'}</strong></p><p>${draft.intent||'Buy'} · ${draft.category||'Apartments'}</p><p>${draft.location||''} · ${draft.area||''}</p><p>KSh ${(Number(draft.price)||0).toLocaleString()}</p><p>${draft.beds||0} Beds · ${draft.baths||0} Baths · ${draft.size||'N/A'}</p><p>${state.draftImages.length} image(s) attached</p></div>`;
 }
 function openListingSuccess(id){const modal=document.createElement('div'); modal.id='listingSuccessModal'; modal.className='property-modal-backdrop'; modal.innerHTML=`<section class="property-modal slim-modal"><header class="modal-header"><button class="modal-close">×</button></header><div class="modal-body success-shell"><h3>Listing Published</h3><p>Your property is now visible in the marketplace.</p><div class="wizard-actions"><button class="btn btn-gold" data-success-view="${id}">View Listing</button><button class="btn" data-success-add="true">Add Another Property</button></div></div></section>`; document.body.appendChild(modal); document.body.classList.add('modal-open');}
-function closeListingFlows(){['authModal','listingWizardModal','myListingsModal','listingSuccessModal'].forEach(id=>document.getElementById(id)?.remove()); document.body.classList.remove('modal-open');}
+function closeListingFlows(){['authModal','listingWizardModal','myListingsModal','listingSuccessModal'].forEach(id=>document.getElementById(id)?.remove()); document.body.classList.remove('modal-open'); closeAccountDropdown();}
 function persistDraft(){ localStorage.setItem(STORAGE_KEYS.draft,JSON.stringify({ ...state.listingDraft, images: state.draftImages })); }
-function saveSession(user){state.user=user; localStorage.setItem(STORAGE_KEYS.session,JSON.stringify(user)); updateAccountUI();}
-function updateAccountUI(){ if(!accountMenuBtn) return; const logged=!!state.user; accountMenuBtn.hidden=!logged; accountMenu.hidden=true; accountMenuBtn.classList.remove('open'); const firstName=state.user?.name?.split(' ')[0]||'Account'; const label=document.getElementById('accountChipLabel'); if(label) label.textContent=firstName; const desktopListBtn=document.querySelector('.desktop-cta'); if(desktopListBtn) desktopListBtn.hidden=logged; const initial = (state.user?.name?.trim()?.[0] || 'A').toUpperCase(); accountMenuBtn.dataset.initial = initial; document.querySelectorAll('[data-list-trigger]').forEach(btn=>btn.textContent='List Your Property'); }
+function saveSession(user){
+  const normalized = { name: user?.name?.trim(), contact: user?.contact?.trim(), authVersion: AUTH_STORAGE_VERSION };
+  state.user = normalized.name && normalized.contact ? normalized : null;
+  if(state.user) localStorage.setItem(STORAGE_KEYS.session,JSON.stringify(state.user));
+  updateAccountUI();
+}
+function updateAccountUI(){ if(!accountMenuBtn) return; const logged=!!state.user; accountMenuBtn.hidden=!logged; closeAccountDropdown(); const firstName=state.user?.name?.split(' ')[0]||'Account'; const label=document.getElementById('accountChipLabel'); if(label) label.textContent=firstName; const desktopListBtn=document.querySelector('.desktop-cta'); if(desktopListBtn) desktopListBtn.hidden=logged; const initial = (state.user?.name?.trim()?.[0] || 'A').toUpperCase(); accountMenuBtn.dataset.initial = initial; document.querySelectorAll('[data-list-trigger]').forEach(btn=>btn.textContent='List Your Property'); }
 function openMyListings(){ const mine=properties.filter(p=>p.owner?.contact===state.user?.contact); const modal=document.createElement('div'); modal.id='myListingsModal'; modal.className='property-modal-backdrop'; const cards=mine.length?mine.map((p)=>`<article class="my-listing-row"><div><span class="listing-status published">Published</span><h4>${p.title}</h4><p>${p.location} · ${p.area}</p><strong>${formatPrice(p.price,p.priceType)}</strong></div><div class="my-listing-actions"><button class="btn btn-muted" data-view-listing="${p.id}">View</button><button class="btn btn-danger" data-delete-listing="${p.id}">Delete</button></div></article>`).join(''):`<div class="empty-my-listings"><h4>No listings yet</h4><p>Create your first property and it will appear here.</p><button class="btn btn-gold" data-edit-draft="true">Start listing</button></div>`; modal.innerHTML=`<section class="property-modal my-listings-modal"><header class="modal-header modal-header-clean"><button class="modal-close" aria-label="Close">×</button></header><div class="modal-body"><h3>My Listings</h3><p class="my-listings-subtitle">Manage your published properties and drafts.</p><div class="my-listings-wrap">${cards}</div></div></section>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); }
 
 let stickyVisible = false;
@@ -281,9 +306,9 @@ document.addEventListener('keydown', (event) => {if (event.key === 'Escape' && s
 document.addEventListener('click',(event)=>{
  if(event.target.matches('[data-list-trigger]')){ event.preventDefault(); if(!state.user) openAuthModal(); else openListingWizard(); }
  if(event.target.id==='accountMenuBtn' || event.target.closest('#accountMenuBtn')){ const isHidden=accountMenu.hidden; accountMenu.hidden=!isHidden; accountMenuBtn.classList.toggle('open', isHidden); return; }
- if(event.target.id==='listAnotherBtn'){ accountMenu.hidden=true; accountMenuBtn.classList.remove('open'); openListingWizard(1); }
- if(event.target.id==='logoutBtn'){ state.user=null; localStorage.removeItem(STORAGE_KEYS.session); accountMenu.hidden=true; updateAccountUI(); }
- if(event.target.id==='myListingsBtn'){ accountMenu.hidden=true; accountMenuBtn.classList.remove('open'); openMyListings(); }
+ if(event.target.id==='listAnotherBtn'){ closeAccountDropdown(); openListingWizard(1); }
+ if(event.target.id==='logoutBtn'){ state.user=null; localStorage.removeItem(STORAGE_KEYS.session); closeAccountDropdown(); updateAccountUI(); }
+ if(event.target.id==='myListingsBtn'){ closeAccountDropdown(); openMyListings(); }
  if(event.target.closest('#authModal .modal-close')||event.target.id==='authModal') closeListingFlows();
  if(event.target.closest('#listingWizardModal .modal-close')||event.target.id==='listingWizardModal') { persistDraft(); closeListingFlows(); }
  if(event.target.closest('#myListingsModal .modal-close')||event.target.id==='myListingsModal') closeListingFlows();
@@ -297,14 +322,14 @@ document.addEventListener('click',(event)=>{
  if(event.target.matches('[data-wizard-back]')){ const form=document.getElementById('listingWizardForm'); const step=Math.max(1,Number(form.dataset.step)-1); state.listingDraft.step=step; persistDraft(); openListingWizard(); }
  if(event.target.matches('[data-wizard-save]')){ const form=document.getElementById('listingWizardForm'); const data=Object.fromEntries(new FormData(form).entries()); Object.assign(state.listingDraft,data); persistDraft(); closeListingFlows(); }
  if(event.target.matches('[data-wizard-next]')){ const form=document.getElementById('listingWizardForm'); const data=Object.fromEntries(new FormData(form).entries()); Object.assign(state.listingDraft,data); const step=Number(form.dataset.step); if(step<6){ state.listingDraft.step=step+1; persistDraft(); openListingWizard(); } else { const listing={...state.listingDraft, images:state.draftImages, id:Date.now(), owner:state.user}; properties.push(userListingToProperty(listing,0)); const all=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]'); all.push(listing); localStorage.setItem(STORAGE_KEYS.listings,JSON.stringify(all)); state.listingDraft={}; state.draftImages=[]; localStorage.removeItem(STORAGE_KEYS.draft); closeListingFlows(); openListingSuccess(listing.id); render({resetVisible:true}); } }
- if(!event.target.closest('.account-wrap') && !accountMenu.hidden){ accountMenu.hidden=true; accountMenuBtn.classList.remove('open'); }
+ if(!event.target.closest('.account-wrap') && !accountMenu.hidden){ closeAccountDropdown(); }
 });
 
 document.addEventListener('change',(event)=>{ if(event.target.id==='listingImagesInput'){ [...event.target.files].forEach(file=>{ const r=new FileReader(); r.onload=()=>{ state.draftImages.push(r.result); persistDraft(); openListingWizard(); }; r.readAsDataURL(file); }); }});
 
 document.addEventListener('submit',(event)=>{ if(event.target.id==='authForm'){ event.preventDefault(); const data=Object.fromEntries(new FormData(event.target).entries()); saveSession({name:data.name,contact:data.contact}); closeListingFlows(); openListingWizard(); }});
 
-try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id)); state.user=JSON.parse(localStorage.getItem(STORAGE_KEYS.session)||'null'); const draft=JSON.parse(localStorage.getItem(STORAGE_KEYS.draft)||'{}'); state.listingDraft=draft||{}; state.draftImages=draft.images||[]; const userListings=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]'); userListings.forEach((item,idx)=>properties.push(userListingToProperty(item,idx)));} catch {}
+try {state.saved = new Set(JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]'));state.recent = JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) || '[]').filter(id=>getProperty(id)); state.user=getStoredSession(); if(!state.user) localStorage.removeItem(STORAGE_KEYS.session); const draft=JSON.parse(localStorage.getItem(STORAGE_KEYS.draft)||'{}'); state.listingDraft=draft||{}; state.draftImages=draft.images||[]; const userListings=JSON.parse(localStorage.getItem(STORAGE_KEYS.listings)||'[]'); userListings.forEach((item,idx)=>properties.push(userListingToProperty(item,idx)));} catch {}
 const urlMatch=window.location.hash.match(/^#property-(\d+)$/); if(urlMatch && getProperty(urlMatch[1])) state.activePropertyId=Number(urlMatch[1]);
 state.visibleCount=getInitialVisibleCount();
 sortSelect.value=state.sort;
